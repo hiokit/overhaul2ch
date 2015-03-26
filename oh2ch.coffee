@@ -3,7 +3,7 @@
 // @name Overhaul 2ch
 // @namespace OH2CH
 // @description 2chデフォルトUIをほんの少しだけ使いやすく
-// @version 0.01
+// @version 0.02
 // @author @h_i_o_k_i
 // @match http://*.2ch.net/*
 // @match http://*.bbspink.com/*
@@ -15,8 +15,8 @@
 
 Config = {
 	'type' : '2ch.net',
-	#'localstorage_url' : 'http://www2.2ch.net/snow/thread.css'
 	'localstorage_url' : 'http://www2.2ch.net/index.html'
+	'auto_img': true
 }
 
 BookmarkletMode = false
@@ -149,6 +149,20 @@ ul,li {
 .thread_prop, .thread_title {
 	display: block;
 }
+#last_read_time {
+	display: block;
+	background-color: #f5f;
+	color: #fefefe;
+	padding:15px auto;
+}
+
+img.thumbs {
+	float:left;
+}
+
+.thread dt {
+	clear:both;
+}
 
 /* board */
 #oh2ch_thread_list {
@@ -177,6 +191,7 @@ ul#dmenu li {
 	margin: 0 0.5em;
 	width: 10em;
 	height: 2em;
+	font-size: 0.8em;
 	font-weight: bold;
 	line-height: 2em;
 	background-color: #2f2f2f;
@@ -402,7 +417,10 @@ class Board extends Elm2ch
 					else
 						iki = '-'
 					read = if @history[key]? then @history[key]["read"] else  '-'
-					line.push("<tr><td>#{i+1}</td><td><a href='/test/read.cgi/#{board}/#{m[1]}/'>#{m[2]}</a></td><td>#{m[3]}</td><td>#{read}</td><td>#{et}</td><td>#{iki}</td></tr>")
+					title = m[2]
+					title = title.replace /\[転載禁止\]&copy;2ch\.net/, ''
+					
+					line.push("<tr><td>#{i+1}</td><td><a href='/test/read.cgi/#{board}/#{m[1]}/'>#{title}</a></td><td>#{m[3]}</td><td>#{read}</td><td>#{et}</td><td>#{iki}</td></tr>")
 			html.innerHTML = "<table id='oh2ch_thread_list'><thead><tr><th>No.</th><th>タイトル</th><th>レス<th>未読</th></th><th>スレ立</th><th>勢い</th></tr></thead><tbody>#{line.join('')}</tbody></table>"
 			body = window.document.getElementsByTagName("body")[0]
 			fst = body.firstChild
@@ -412,6 +430,7 @@ class Board extends Elm2ch
 class Thread　extends Elm2ch
 	res: []
 	read: 0
+	last_read_time: null
 	refine: () ->
 		@_set_post_iframe()
 		@_thread_append_html()
@@ -485,8 +504,6 @@ class Thread　extends Elm2ch
 							@_disable_button()
 						,100)
 						mes.innerHTML = '書きこみ中....'
-						#e.preventDefault();
-						#@_post(i,action)
 						return false
 				break
 	_enable_button: () ->
@@ -506,27 +523,6 @@ class Thread　extends Elm2ch
 		reload_button = document.getElementById("reload_button")
 		if reload_button?
 			reload_button.disabled = true
-	_post: (formdata,action) ->
-		self = this
-		postdata = {
-			"submit" : "%8F%91%82%AB%8D%9E%82%DE"
-		}
-		###
-		for n in ["submit","FROM","mail","MESSAGE","bbs","key","time","submit"]
-			postdata[n] = document.getElementsByName(n)[0].value
-
-		xhr = new XMLHttpRequest();
-		xhr.open "POST", "#{action}", true
-		xhr.overrideMimeType('text/html; charset=shift_jis');
-		xhr.setRequestHeader( 'Content-Type', 'application/x-www-form-urlencoded; charset=Shift_JIS' );
-		xhr.onreadystatechange = ->
-			if xhr.readyState is 4
-				if xhr.status is 200
-					response = xhr.responseText
-					console.log(response)
-					#callback(response)
-					return false
-		###
 	_reload_thread: () ->
 		url = this.thread_html_url()
 		@fetch_original(url, (data) =>
@@ -550,9 +546,10 @@ class Thread　extends Elm2ch
 			dd = dl.getElementsByTagName "dd"
 			read = 0
 			prev_read = @read
+
 			for i in [0..dt.length-1]
 				r = {}
-				if m = dt[i].innerHTML.match /(\d+)\s?：(.*)：(\d\d\d\d\/\d\d\/\d\d)\((.*?)\)\s(\d\d:\d\d:\d\d(?:\.\d\d)?)\sID:(\S+)(.*)/
+				if m = dt[i].innerHTML.match /(\d+)\s?：(.*)：(\d\d\d\d\/\d\d\/\d\d)\((.*?)\)\s(\d\d:\d\d:\d\d(?:\.\d\d)?)\s(?:ID:(\S+)(.*))?/
 					dt[i].id = "r#{m[1]}"
 					r["num"] = m[1]
 					r["name"] = m[2]
@@ -564,10 +561,22 @@ class Thread　extends Elm2ch
 					r["body"] = dd[i]
 					@read = parseInt(r["num"])
 					@res[@read] = r
+
+					#アンカー変換
 					dd[i].innerHTML = dd[i].innerHTML.replace(
 						/<a href=[^>]+>&gt;&gt;(\d+)<\/a>/g, 
 						"<a class='anc$1' href='#{location.href}#r$1'>&gt;&gt;$1</a>"
 					)
+
+
+					#画像サムネイル化
+					if @current["config"]["auto_img"]
+						if dd[i].innerHTML.match /(?:imgur\.com|\.twimg\.com)/
+							console.log dd[i]
+							dd[i].innerHTML = dd[i].innerHTML.replace(
+								/(https?:\/\/\S+.(?:jpe?g|gif|png))/g,
+								"<a href='$1' target='_blank'><img height='250' class='thumbs' src='$1' alt='$1'></a>"
+						)
 					#<a href="../test/read.cgi/anime/1424147786/12" target="_blank">&gt;&gt;12</a>
 	on_history: () ->
 		if @current["title"]
@@ -581,14 +590,31 @@ class Thread　extends Elm2ch
 			document.getElementById("x_history").innerHTML = hd.join('\n')
 		if @current['thread']? && @history?
 			ct = @history["#{@current['board']}/#{@current['thread']}"]
+			@last_read_time ||= new Date()
 			if ct?
 				@prev_read = ct["prev_read"]
 				last = document.getElementById("r#{(@prev_read || 0)+1}")
+				lrt = document.getElementById("last_read_time")
+				unless lrt?
+					lrt = document.createElement("span")
+					lrt.id = "last_read_time"
+					dl = document.getElementsByClassName("thread")[0]
+					dl.parentNode.appendChild(lrt)
+				lrt.innerHTML = ''
 				if last?
 					last.classList.add 'newres'
+				else if @last_read_time?
+					n = new Date()
+					s = parseInt((n - @last_read_time) / 1000)
+					if s > 0
+						lrt.innerHTML = "#{@last_read_time} から #{s}秒間更新されていません"
+					@last_read_time = n
+
+class Storage
+
+
 
 oh2ch = new Oh2ch
 oh2ch.execute()
-
 
 
