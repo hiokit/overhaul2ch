@@ -11,7 +11,7 @@
 // ==/UserScript==
 ###
 
-#javascript:(function(d,s){s=d.createElement('script');s.src='//browser.l4ch.net/_static/js/oh2ch.js';s.type='text/javascript';s.charset='UTF-8';d.body.appendChild(s);})(document);
+#javascript:(function(d,s){s=d.createElement('script');s.src='//browser.l4ch.net/overhaul2ch/oh2ch.user.js';s.type='text/javascript';s.charset='UTF-8';d.body.appendChild(s);})(document);
 
 Config = {
 	'type' : '2ch.net',
@@ -35,13 +35,13 @@ class Oh2ch
 			current["ifm_returner"] = true
 		else if loc.match(/bbs\.cgi/)
 			current["inbbs"] = 1
-		else if chk = loc.match(/^http:\/\/[^\/]+\/(.*?)test\/read\.cgi\/(\w+)\/(\d+)/)
-			current["path2board"] = chk[1]
-			current["board"] = chk[2]
-			current["thread"] = chk[3]
-		else if chk = loc.match(/^http:\/\/[^\/]+\/([\w\/]*?)(\w+)\/?$/)
-			current["path2board"] = chk[1]
-			current["board"] = chk[2]
+		else if chk = loc.match(/^http:\/\/[^\/]+\/test\/read\.cgi\/(\w+)\/(\d+)/)
+			current["path2board"] = ''
+			current["board"] = chk[1]
+			current["thread"] = chk[2]
+		else if chk = loc.match(/^http:\/\/[^\/]+\/(\w+)\/?$/)
+			current["path2board"] = ''
+			current["board"] = chk[1]
 #		else if current["hostname"] == lsu_host
 #			current["ifm_returner"] = true
 		if current["hostname"].match(/2ch\.sc/)
@@ -307,7 +307,7 @@ class Elm2ch
 <div id='x_title'>(´・ω・`)</div><div id='x_history'></div>
 <div id='myversion'>
 <ul id="dmenu">
-<li>OH2ch ver 0.01
+<li>OH2ch ver 0.02
 <ul>
 	<li>テスト中</li>
 	<li><a href="http://#{@current['hostname']}/#{@current['board']}/">スレッド一覧</a></li>
@@ -490,7 +490,11 @@ class Thread　extends Elm2ch
 								rmes.innerHTML = "<span style='color:red;font-size:120%;'>ERROR：#{r[1]}</span>"
 					else
 						rmes.innerHTML = 'unknown message.'
-					ifrc.stop()
+					if ifrc.document.execCommand
+						ifrc.document.execCommand('Stop')
+					else
+						ifrc.stop()
+
 					ifr.parentNode.removeChild ifr
 
 					@_reload_thread()
@@ -563,16 +567,17 @@ class Thread　extends Elm2ch
 					@res[@read] = r
 
 					#アンカー変換
+					nh = location.href
+					n = nh.replace(location.hash, '')
 					dd[i].innerHTML = dd[i].innerHTML.replace(
 						/<a href=[^>]+>&gt;&gt;(\d+)<\/a>/g, 
-						"<a class='anc$1' href='#{location.href}#r$1'>&gt;&gt;$1</a>"
+						"<a class='anc$1' href='#{nh}#r$1'>&gt;&gt;$1</a>"
 					)
 
 
 					#画像サムネイル化
 					if @current["config"]["auto_img"]
 						if dd[i].innerHTML.match /(?:imgur\.com|\.twimg\.com)/
-							console.log dd[i]
 							dd[i].innerHTML = dd[i].innerHTML.replace(
 								/(https?:\/\/\S+.(?:jpe?g|gif|png))/g,
 								"<a href='$1' target='_blank'><img height='250' class='thumbs' src='$1' alt='$1'></a>"
